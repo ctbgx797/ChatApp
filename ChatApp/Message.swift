@@ -9,6 +9,8 @@
 import Foundation
 import MessageKit
 
+//MessageTypeはこの要素がないと駄目というのを言っているらしい
+//何故かって?しらん
 struct Message: MessageType {
     var sender: SenderType
     
