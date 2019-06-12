@@ -24,7 +24,7 @@ class ChatViewController: MessagesViewController {
     var messageList: [Message] = []     //Message型のオブジェクトの入る配列
     var sendData: [String: Any] = [:]   //Realtimeデータベースに書き込む内容を格納する辞書
     var readData: [[String: Any]] = []  //RealtimeDatabaseからの読み込み
-    
+    var deleteData: [[String: Any]] = []
     let dateFormatter:DateFormatter = DateFormatter() //日時のフォーマットを管理するもの
     
     
@@ -68,8 +68,8 @@ class ChatViewController: MessagesViewController {
         if !sendData.isEmpty {sendData = [:] } //辞書の初期化(送信データの中身がからじゃなければ空にする)
         let sendRef = ref.child("chats").childByAutoId()//自動生成の文字列の階層までのDatabaseReferenceを格納
         let messageId = sendRef.key! //自動生成された文字列(AutoId)を格納
-//        print("sendRefの中身\n\(sendRef)")
-//        print("messageIdの中身\n\(messageId)")
+        print("sendRefの中身\n\(sendRef)")
+        print("messageIdの中身\n\(messageId)")
         
         //これがJSON(書き方のルール的な)
         sendData = ["senderName": user?.displayName,//送信者の名前
@@ -99,7 +99,6 @@ class ChatViewController: MessagesViewController {
             DispatchQueue.main.async {//クロージャの中を同期処理
                 self.snapshotToArray(snapshot: snapshot)//スナップショットを配列(readData)に入れる処理。下に定義
                 self.displayMessage() //メッセージを画面に表示するための処理
-//                print("readData: \(self.readData)")
             }
         }
     }
@@ -123,8 +122,12 @@ class ChatViewController: MessagesViewController {
             for snapChild in snapChildren! {
                 //要素を追加していく
                 if let postDict = snapChild.value as? [String: Any] {
+                    print(postDict)
                     self.readData.append(postDict)
+                    
                 }
+                print(readData)
+                
             }
         }
     }
@@ -142,6 +145,7 @@ class ChatViewController: MessagesViewController {
                 sentDate: self.dateFormatter.date(from: item["createdAt"] as! String)!,
                 kind: MessageKind.text(item["content"] as! String)
             )
+            print(message)
             messageList.append(message)
         }
         
@@ -237,6 +241,23 @@ extension ChatViewController: MessagesDataSource {
         return NSAttributedString(string: dateString, attributes: [NSAttributedString.Key.font: UIFont.preferredFont(forTextStyle: .caption2)])
     }
     
+    func showAlert(message: String, handler: ((Bool) -> Void)?) {
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        let yesAction: UIAlertAction = UIAlertAction(title: "OK", style: .default){ action in
+            if let handler = handler {
+                handler(true) // OKを選択したらクロージャでtrueを返す
+            }
+        }
+        let noAction: UIAlertAction = UIAlertAction(title: "キャンセル", style: .cancel){ action in
+            if let handler = handler {
+                handler(false) // キャンセルを選択したらクロージャでfalseを返す
+            }
+        }
+        alert.addAction(yesAction)
+        alert.addAction(noAction)
+        present(alert, animated: true, completion: nil)
+    }
+    
     
 }
 
@@ -305,32 +326,29 @@ extension ChatViewController: MessageCellDelegate {
     // メッセージをタップした時の挙動
     func didTapMessage(in cell: MessageCollectionViewCell) {
         //alertの内容を定義
-        let alert = UIAlertController(title: "削除", message: "このメッセージを削除しますか?", preferredStyle: UIAlertController.Style.alert)
-        let cancelAction = UIAlertAction(title: "キャンセル", style: .default)
-        let deleteAction = UIAlertAction(title: "削除する", style: .destructive) { (action: UIAlertAction) in
-            
-            //削除ボタンを押したら発動する処理
-            self.ref.child("chats")removeValue()
-            
-        }
-        //aleartを発報
-        alert.addAction(cancelAction)
-        alert.addAction(deleteAction)
-        present(alert, animated: true, completion: nil)
-//        alert.addAction(UIAlertAction(title: "No", style: UIAlertAction.Style.cancel, handler: nil))
-//        alert.addAction(UIAlertAction(title: "削除する", style: UIAlertAction.Style.destructive, handler: nil))
-//        self.present(alert, animated: true, completion: nil)
-        
-//        swich alert.addAction() {
-//        case
-        
-//        }
-        messagesCollectionView.reloadData()
-        print(alert.addAction)
+        //    func didTapMessage(in cell: MessageCollectionViewCell) {
         print("Message tapped")
+        guard let indexPath = messagesCollectionView.indexPath(for: cell) else {return}
+        // タップしたメッセージをindexPathで読み込むインスタンス生成
+        let strKey = self.readData[indexPath.section]
+        // 認証したユーザーのIDとタップしたメッセージのユーザーIDを照合し、違ったら処理を終了
+        guard strKey["senderId"]! as! String == Auth.auth().currentUser!.uid  else {return}
+        showAlert(message: "このメッセージを削除しますか？", handler: {showAlerted in
+            
+            if showAlerted {
+                // OKなら削除処理を実行
+                // chats/個別のmessageId/ の階層を参照し、データベースから削除.
+                self.ref.child("chats/\(strKey["messageId"]!)").removeValue()
+                // displayMessage()で使用しているメッセージリストからindexPathで指定したデータを削除する
+                self.messageList.remove(at: indexPath.section)
+                // リロードする
+                self.messagesCollectionView.reloadData()
+            } else {
+                //キャンセルであれば何もしない
+            }
+        })
     }
 }
-
 //InputAccessoryViewDelegateの拡張
 extension ChatViewController: InputBarAccessoryViewDelegate {
     // メッセージ送信ボタンを押されたとき
