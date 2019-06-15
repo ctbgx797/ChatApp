@@ -143,9 +143,11 @@ class ChatViewController: MessagesViewController {
                 sender: Sender(id: item["senderId"] as! String,displayName: item["senderName"] as! String),
                 messageId: item["messageId"] as! String,
                 sentDate: self.dateFormatter.date(from: item["createdAt"] as! String)!,
+                //実際の文字
                 kind: MessageKind.text(item["content"] as! String)
             )
             print(message)
+            //
             messageList.append(message)
         }
         
@@ -325,28 +327,59 @@ extension ChatViewController: MessageCellDelegate {
     
     // メッセージをタップした時の挙動
     func didTapMessage(in cell: MessageCollectionViewCell) {
-        //alertの内容を定義
-        //    func didTapMessage(in cell: MessageCollectionViewCell) {
-        print("Message tapped")
-        guard let indexPath = messagesCollectionView.indexPath(for: cell) else {return}
-        // タップしたメッセージをindexPathで読み込むインスタンス生成
-        let strKey = self.readData[indexPath.section]
-        // 認証したユーザーのIDとタップしたメッセージのユーザーIDを照合し、違ったら処理を終了
-        guard strKey["senderId"]! as! String == Auth.auth().currentUser!.uid  else {return}
-        showAlert(message: "このメッセージを削除しますか？", handler: {showAlerted in
+        //
+        let indexPath = messagesCollectionView.indexPath(for: cell)
+        //
+        let messageData = messageList[(indexPath?.section)!]
+        //消したいメッセージIDをとりたい
+        let deleteMessageId = messageData.messageId
+        
+        //アラートの内容を定義
+        if messageData.sender.senderId == Auth.auth().currentUser?.uid {
+            let alert = UIAlertController(title: "削除", message: "このメッセージを削除しますか？", preferredStyle: .alert)
+            let cancelAction = UIAlertAction(title:"キャンセル", style: .cancel)
+            //アラートに追加するアクションを定義
+            //.destructiveで文字を赤くする
+            let deleteAction = UIAlertAction(title: "削除する", style: .destructive, handler: { (action) in
+                //削除処理
+                self.ref.child("chats").child(deleteMessageId).removeValue()
+                
+            })
+            //アラートを発報
+            alert.addAction(deleteAction)
+            alert.addAction(cancelAction)
             
-            if showAlerted {
-                // OKなら削除処理を実行
-                // chats/個別のmessageId/ の階層を参照し、データベースから削除.
-                self.ref.child("chats/\(strKey["messageId"]!)").removeValue()
-                // displayMessage()で使用しているメッセージリストからindexPathで指定したデータを削除する
-                self.messageList.remove(at: indexPath.section)
-                // リロードする
-                self.messagesCollectionView.reloadData()
-            } else {
-                //キャンセルであれば何もしない
+            //データの選択されたIDと現在のログインしているユーザのIDが一致した場合のみ削除できる
+            if messageData.sender.senderId == Auth.auth().currentUser?.uid{
+                    present(alert, animated: true)
             }
-        })
+            
+        }
+        
+//        塚田さんバージョン
+//    func didTapMessage(in cell: MessageCollectionViewCell) {
+//        //alertの内容を定義
+//        //    func didTapMessage(in cell: MessageCollectionViewCell) {
+//        print("Message tapped")
+//        guard let indexPath = messagesCollectionView.indexPath(for: cell) else {return}
+//        // タップしたメッセージをindexPathで読み込むインスタンス生成
+//        let strKey = self.readData[indexPath.section]
+//        // 認証したユーザーのIDとタップしたメッセージのユーザーIDを照合し、違ったら処理を終了
+//        guard strKey["senderId"]! as! String == Auth.auth().currentUser!.uid  else {return}
+//        showAlert(message: "このメッセージを削除しますか？", handler: {showAlerted in
+//
+//            if showAlerted {
+//                // OKなら削除処理を実行
+//                // chats/個別のmessageId/ の階層を参照し、データベースから削除.
+//                self.ref.child("chats/\(strKey["messageId"]!)").removeValue()
+//                // displayMessage()で使用しているメッセージリストからindexPathで指定したデータを削除する
+//                self.messageList.remove(at: indexPath.section)
+//                // リロードする
+//                self.messagesCollectionView.reloadData()
+//            } else {
+//                //キャンセルであれば何もしない
+//            }
+//        })
     }
 }
 //InputAccessoryViewDelegateの拡張
